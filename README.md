@@ -1,5 +1,6 @@
 # Network Automation Mini-Project (vSphere + ITSM)
 **Default Flow:** Terraform (vSphere) + Ansible + GitLab CI/CD → **provision VM** → **create ServiceNow/Jira ticket** via Python API.  
+
 AWS variant still included; switch by setting `TF_DIR=terraform/aws`.
 
 ---
@@ -37,7 +38,7 @@ Mark secrets Masked/Protected where appropriate.
 | Key | Value | Notes |
 |---|---|---|
 | `TF_DIR` | `terraform/vsphere` | Default (set `terraform/aws` to use AWS) |
-| `PROJECT_NAME` | `netauto-mini` | Tagging + ticket context |
+| `PROJECT_NAME` | `infra-orchestrator-vsphere-itsm` | Tagging + ticket context |
 | `ANSIBLE_SSH_USER` | `ubuntu` | Typical for Ubuntu templates; change if needed |
 | `ANSIBLE_PRIVATE_KEY` (File) | *your private key file* | Pipeline writes it to `ansible/.ssh/id_rsa` |
 
