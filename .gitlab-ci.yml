@@ -1,0 +1,114 @@
+stages:
+  - validate
+  - plan
+  - apply
+  - deploy
+  - integrate
+  - notify
+  - destroy
+
+variables:
+  TF_DIR: "${TF_DIR:-terraform/vsphere}"
+  TF_PLAN_FILE: "tfplan.out"
+  ANSIBLE_SSH_USER: "${ANSIBLE_SSH_USER:-ubuntu}"
+
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - ${TF_DIR}/.terraform/
+
+tf_validate:
+  stage: validate
+  image: hashicorp/terraform:1.7.5
+  script:
+    - cd "$TF_DIR"
+    - terraform init -input=false
+    - terraform validate
+  artifacts:
+    paths:
+      - ${TF_DIR}/.terraform/
+    when: always
+
+tf_plan:
+  stage: plan
+  image: hashicorp/terraform:1.7.5
+  needs: ["tf_validate"]
+  script:
+    - cd "$TF_DIR"
+    - terraform init -input=false
+    - terraform plan -input=false -out $TF_PLAN_FILE
+  artifacts:
+    paths:
+      - ${TF_DIR}/$TF_PLAN_FILE
+      - ${TF_DIR}/.terraform/
+    when: always
+
+tf_apply:
+  stage: apply
+  image: hashicorp/terraform:1.7.5
+  needs: ["tf_plan"]
+  script:
+    - cd "$TF_DIR"
+    - terraform init -input=false
+    - terraform apply -input=false -auto-approve $TF_PLAN_FILE || terraform apply -input=false -auto-approve
+    - terraform output -json > ../outputs.json
+  artifacts:
+    paths:
+      - terraform/outputs.json
+      - ${TF_DIR}/terraform.tfstate
+      - ${TF_DIR}/terraform.tfstate.backup
+    when: always
+
+ansible_deploy:
+  stage: deploy
+  image: python:3.11-slim
+  needs: ["tf_apply"]
+  before_script:
+    - python -V
+    - pip install --no-cache-dir ansible
+    - apt-get update && apt-get install -y openssh-client && rm -rf /var/lib/apt/lists/*
+    - mkdir -p ansible/.ssh
+    - cp "$ANSIBLE_PRIVATE_KEY" ansible/.ssh/id_rsa
+    - chmod 600 ansible/.ssh/id_rsa
+  script:
+    - python scripts/make_inventory.py --in terraform/outputs.json --out ansible/inventory.ini
+    - ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ansible/inventory.ini ansible/playbook.yml -u "${ANSIBLE_SSH_USER}" --private-key ansible/.ssh/id_rsa
+  artifacts:
+    paths:
+      - ansible/inventory.ini
+    when: always
+
+py_integrate:
+  stage: integrate
+  image: python:3.11-slim
+  needs: ["ansible_deploy"]
+  before_script:
+    - pip install --no-cache-dir boto3 requests
+  script:
+    - python scripts/tag_and_register.py --in terraform/outputs.json --project "${PROJECT_NAME:-netauto-mini}" --region "${AWS_DEFAULT_REGION:-us-east-1}"
+  artifacts:
+    paths:
+      - cmdb.json
+    when: always
+
+notify_itsm:
+  stage: notify
+  image: python:3.11-slim
+  needs: ["py_integrate"]
+  before_script:
+    - pip install --no-cache-dir requests
+  script:
+    - python scripts/servicenow_jira.py --cmdb cmdb.json
+  artifacts:
+    paths:
+      - itsm_result.json
+    when: always
+
+tf_destroy:
+  stage: destroy
+  image: hashicorp/terraform:1.7.5
+  when: manual
+  script:
+    - cd "$TF_DIR"
+    - terraform init -input=false
+    - terraform destroy -auto-approve

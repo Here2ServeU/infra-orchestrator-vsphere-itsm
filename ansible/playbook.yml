@@ -1,0 +1,31 @@
+---
+- name: Configure web server
+  hosts: web
+  become: yes
+  gather_facts: yes
+
+  pre_tasks:
+    - name: Wait for SSH to be ready
+      wait_for_connection:
+        timeout: 300
+
+  tasks:
+    - name: Ensure NGINX is installed (Ubuntu/Debian)
+      apt:
+        name: nginx
+        state: present
+        update_cache: yes
+
+    - name: Ensure NGINX is running and enabled
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Deploy landing page
+      template:
+        src: roles/web/templates/index.html.j2
+        dest: /var/www/html/index.html
+        owner: root
+        group: root
+        mode: '0644'
