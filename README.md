@@ -5,7 +5,7 @@ AWS variant still included; switch by setting `TF_DIR=terraform/aws`.
 
 ---
 
-## What’s New
+## What to know
 1. **vSphere is the default compute target** (`TF_DIR=terraform/vsphere` in pipeline).
 2. **ITSM step added**: `notify_itsm` creates a **ServiceNow** CMDB/Incident and/or a **Jira** Issue from `cmdb.json`.
 3. **Inventory builder** supports both **AWS** (`public_ip`) and **vSphere** (`vm_ip`).
